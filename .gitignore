@@ -1,0 +1,12 @@
+# Ignorar modelos y archivos grandes
+*.pkl
+*.joblib
+
+# Archivos temporales de Python
+__pycache__/
+*.pyc
+*.log
+
+# Entornos virtuales
+venv/
+.env/
