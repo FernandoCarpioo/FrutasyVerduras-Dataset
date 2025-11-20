@@ -8,8 +8,8 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import joblib
 
 ##AQUI COLOCAR LA RUTA BIEN
-ruta_training = r"C:\Users\ferna\PycharmProjects\FrutasyVerduras-Datasetnuevo\Training"
-ruta_test = r"C:\Users\ferna\PycharmProjects\FrutasyVerduras-Datasetnuevo\Test"
+ruta_training = r"C:\Users\luise\OneDrive\Documentos\Machine Learning\FrutasyVerduras-Dataset\Training"
+ruta_test = r"C:\Users\luise\OneDrive\Documentos\Machine Learning\FrutasyVerduras-Dataset\Test"
 max_imagenes_por_clase = 1000
 tamano_imagen = (64, 64)
 
