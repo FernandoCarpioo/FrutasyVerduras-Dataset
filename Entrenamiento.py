@@ -1,76 +1,93 @@
-import os, random
+import os
+import random
 import numpy as np
 from PIL import Image
-from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.decomposition import PCA
+from sklearn.svm import SVC
+from sklearn.pipeline import Pipeline
 import joblib
 
-##AQUI COLOCAR LA RUTA BIEN
-ruta_training = r"C:\Users\luise\OneDrive\Documentos\Machine Learning\FrutasyVerduras-Dataset\Training"
-ruta_test = r"C:\Users\luise\OneDrive\Documentos\Machine Learning\FrutasyVerduras-Dataset\Test"
-max_imagenes_por_clase = 1000
-tamano_imagen = (64, 64)
 
-def cargar_datos_recursivo(ruta_base, max_por_clase=None):
+# RUTA DE TU DATASET
+ruta_training = r"C:\Users\ferna\PycharmProjects\FrutasyVerduras-Datasetnuevo\Training"
+
+# TAMAÑO DE IMAGEN
+tamano_imagen = (192, 192)
+
+# -------------------------------------------------------------
+# Cargar imágenes con límite por clase (float32 optimizado)
+# -------------------------------------------------------------
+def cargar_muestras_limitadas(ruta_base, limite=9100):
     X, y = [], []
-    total_imagenes = 0
 
-    for root, dirs, files in os.walk(ruta_base):
-        partes = root.split(os.sep)
-        if len(partes) < 2:
-            continue
-        etiqueta = partes[-2]
-        imagenes = [f for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    ruta_frutas = os.path.join(ruta_base, "Frutas")
+    ruta_verduras = os.path.join(ruta_base, "Verduras")
 
-        if max_por_clase and len(imagenes) > max_por_clase:
-            imagenes = random.sample(imagenes, max_por_clase)
+    def recolectar_imagenes(ruta_categoria):
+        lista = []
+        for root, _, files in os.walk(ruta_categoria):
+            for f in files:
+                if f.lower().endswith((".png", ".jpg", ".jpeg")):
+                    lista.append(os.path.join(root, f))
+        return lista
 
-        for img_file in imagenes:
-            ruta_imagen = os.path.join(root, img_file)
+    print("Recolectando rutas de imágenes...")
+    frutas = recolectar_imagenes(ruta_frutas)
+    verduras = recolectar_imagenes(ruta_verduras)
+
+    random.shuffle(frutas)
+    random.shuffle(verduras)
+
+    frutas = frutas[:limite]
+    verduras = verduras[:limite]
+
+    print(f"Usando {len(frutas)} frutas y {len(verduras)} verduras")
+
+    def cargar_lista(lista, etiqueta):
+        for ruta in lista:
             try:
-                img = Image.open(ruta_imagen).convert('RGB').resize(tamano_imagen)
-                features = np.array(img).flatten()
-                X.append(features)
+                img = Image.open(ruta).convert("RGB").resize(tamano_imagen)
+                # FLOAT32 → LA MITAD DE RAM
+                X.append(np.array(img, dtype=np.float32).flatten())
                 y.append(etiqueta)
-                total_imagenes += 1
-            except Exception as e:
-                print(f"Error cargando {ruta_imagen}: {e}")
+            except:
+                pass
 
-    print(f"Se cargaron {total_imagenes} imágenes desde {ruta_base}")
-    return np.array(X), np.array(y)
+    print("Cargando imágenes a memoria...")
+    cargar_lista(frutas, "Frutas")
+    cargar_lista(verduras, "Verduras")
 
-print("Cargando datos...")
-X_train, y_train = cargar_datos_recursivo(ruta_training, max_imagenes_por_clase)
-X_test, y_test = cargar_datos_recursivo(ruta_test, max_imagenes_por_clase)
+    return np.array(X, dtype=np.float32), np.array(y)
 
-print("Estandarizando y aplicando PCA...")
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+# -------------------------------------------------------------
+# ENTRENAMIENTO COMPLETO (sin test)
+# -------------------------------------------------------------
 
-pca = PCA(n_components=100)
-X_train_pca = pca.fit_transform(X_train_scaled)
-X_test_pca = pca.transform(X_test_scaled)
+print("\nCargando datos del dataset...")
+X, y = cargar_muestras_limitadas(ruta_training, limite=9100)
 
-print("Entrenando Random Forest...")
-modelo_rf = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=None,
-    n_jobs=-1,
-    random_state=42
-)
-modelo_rf.fit(X_train_pca, y_train)
+print(f"\nTotal de imágenes cargadas: {X.shape[0]}")
+print(f"Dimensión de cada imagen: {X.shape[1]}")
 
-y_pred = modelo_rf.predict(X_test_pca)
-print(f"\nPrecisión: {accuracy_score(y_test, y_pred):.2f}")
-print(classification_report(y_test, y_pred))
-print("Matriz de confusión:")
-print(confusion_matrix(y_test, y_pred))
+# Asegurar float32 (por si acaso)
+X = X.astype(np.float32)
 
-joblib.dump(modelo_rf, "modelo_randomforest.pkl")
-joblib.dump(pca, "pca_transform.pkl")
-joblib.dump(scaler, "scaler.pkl")
+# -------------------------------------------------------------
+# Pipeline: Scaler + PCA + SVM probabilístico
+# -------------------------------------------------------------
+modelo = Pipeline([
+    ("scaler", StandardScaler(with_mean=True, with_std=True)),
+    ("pca", PCA(n_components=100)),  # 100 componentes = mejor para RAM
+    ("svm", SVC(kernel="rbf", probability=True, C=10, gamma='scale'))
+])
 
-print("\n✅ Modelo, PCA y Scaler guardados correctamente.")
+
+print("\nEntrenando modelo SVM + PCA + Scaler...")
+modelo.fit(X, y)
+
+# Guardar pipeline COMPLETO
+joblib.dump(modelo, "modelo_svm_pipeline.pkl")
+
+print("\n✔ Entrenamiento COMPLETO!")
+print("✔ Modelo guardado como: modelo_svm_pipeline.pkl")
